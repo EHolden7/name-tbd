@@ -1,11 +1,24 @@
-import torch
-from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
-from diffusers.utils import export_to_video
+from sentence_transformers import SentenceTransformer, util
+import requests
+import json
 
-pipe = DiffusionPipeline.from_pretrained("damo-vilab/text-to-video-ms-1.7b", torch_dtype=torch.float16, variant="fp16")
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-pipe.enable_model_cpu_offload()
+# https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+# https://huggingface.co/tasks/sentence-similarity
 
-prompt = "Spiderman is surfing"
-video_frames = pipe(prompt, num_inference_steps=25).frames
-video_path = export_to_video(video_frames)
+API_URL = 'https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2'
+
+def query(payload):
+    response = requests.post(API_URL, json=payload)
+    return response.json()
+
+data = query(
+    {
+        "inputs": {
+            "source_sentence": "Brain cancer is the leading cause of cancer-related death in children. Early detection and serial monitoring are essential for better therapeutic outcomes",
+            "sentences":["This is an example sentence", 
+             "Children with an aggressive form of brain cancer known as medulloblasoma may soon be able to have their cancer detected a lot more accuately",
+             "Doctors may soon be able to better monitor brain cancer in children and potentially predict the tumour progress and therapy response, thanks to University of Queensland-led research, funded by the Children’s Hospital Foundation.",
+             ]
+        }
+    })
+

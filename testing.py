@@ -2,14 +2,22 @@ from sentence_transformers import SentenceTransformer, util
 import requests
 import json
 import PyPDF2
+from cleantext import clean
+from nlpretext import Preprocessor
+from nlpretext.basic.preprocess import (normalize_whitespace, remove_punct, remove_eol_characters, remove_stopwords, lower_text)
+from nlpretext.social.preprocess import remove_mentions, remove_hashtag, remove_emoji
+from nltk.tokenize import sent_tokenize
+import nltk
+nltk.download('punkt')
 
 # https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
 # https://huggingface.co/tasks/sentence-similarity
 
 API_URL = 'https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2'
+headers = {"Authorization": f"Bearer hf_"}
 
 def query(payload):
-    response = requests.post(API_URL, json=payload)
+    response = requests.post(API_URL, headers=headers, json=payload)
     return response.json()
 
 data = query(
@@ -72,3 +80,50 @@ data = query(
 # break the individual blocks of text into more valuable individual sentences
 # perform semantic similarity on all pairs in source and reference
 # scores greater than x are considered a good match and likely indicate accuracy, lack of indicates inaccurate information
+
+preprocessor = Preprocessor()
+preprocessor.pipe(lower_text)
+preprocessor.pipe(remove_mentions)
+preprocessor.pipe(remove_hashtag)
+preprocessor.pipe(remove_emoji)
+preprocessor.pipe(remove_eol_characters)
+#preprocessor.pipe(remove_stopwords, args={'lang': 'en'})
+#preprocessor.pipe(remove_punct)
+preprocessor.pipe(normalize_whitespace)
+
+liquidBiopsyArticleClean = preprocessor.run(liquidBiopsyArticle)
+liquidBiopsyPaperClean = preprocessor.run(liquidBiopsyPaper)
+openDayArticleClean = preprocessor.run(openDayArticle)
+
+dataClean = query(
+    {
+        "inputs": {
+            "source_sentence": liquidBiopsyPaperClean,
+            "sentences":[liquidBiopsyArticleClean,
+                         openDayArticleClean]
+        }
+    })
+
+# could get a whole of document score to decide which documents to spend the time doing the sliding window on
+
+liquidBiopsyArticleSent = [x for x in sent_tokenize(liquidBiopsyArticleClean) if len(x) >= 10]
+liquidBiopsyPaperSent = [x for x in sent_tokenize(liquidBiopsyPaperClean) if len(x) >= 10]
+openDayArticleSent = [x for x in sent_tokenize(openDayArticleClean) if len(x) >= 10]
+
+def sent_score(source, ref, threshold):
+    matches = {}
+    for i in range(len(source)):
+        scores = query({"inputs": {"source_sentence": source[i],
+                                  "sentences": ref}})
+        #print(scores)
+        temp = [{ref[x]: scores[x]} for x in range(len(scores)) if scores[x] > threshold] #or scores[x] == max(scores)??
+        if len(temp) != 0:
+            matches[source[i]] = temp
+        #print(matches)
+    print('done')
+    return matches
+
+scores = sent_score(liquidBiopsyArticleSent, liquidBiopsyPaperSent, 0.6)
+
+# hard to know what the idea score threshold is
+# should I conduct tests to choose? Should I get a better understanding of the theory and calculate some threshold?

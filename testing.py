@@ -1,6 +1,6 @@
 from sentence_transformers import SentenceTransformer, util
 import requests
-import json
+
 import PyPDF2
 from cleantext import clean
 from nlpretext import Preprocessor
@@ -9,12 +9,14 @@ from nlpretext.social.preprocess import remove_mentions, remove_hashtag, remove_
 from nltk.tokenize import sent_tokenize
 import nltk
 nltk.download('punkt')
+from scrapy.crawler import CrawlerProcess
+from spiders.google_spider import GoogSpider, QuotesSpider
 
 # https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
 # https://huggingface.co/tasks/sentence-similarity
 
 API_URL = 'https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2'
-headers = {"Authorization": f"Bearer hf_"}
+headers = {"Authorization": f"Bearer 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"}
 
 def query(payload):
     response = requests.post(API_URL, headers=headers, json=payload)
@@ -58,9 +60,9 @@ def extract_from_pdf(file_name):
 
     return pdf_text
 
-liquidBiopsyArticle = extract_from_pdf('name-tbd\liquidBiopsyArticle.pdf')
-liquidBiopsyPaper = extract_from_pdf('name-tbd\liquidBiopsy.pdf')
-openDayArticle = extract_from_pdf('name-tbd\openDayArticle.pdf')
+liquidBiopsyArticle = extract_from_pdf('liquidBiopsyArticle.pdf')
+liquidBiopsyPaper = extract_from_pdf('liquidBiopsy.pdf')
+openDayArticle = extract_from_pdf('openDayArticle.pdf')
 
 data = query(
     {
@@ -127,3 +129,21 @@ scores = sent_score(liquidBiopsyArticleSent, liquidBiopsyPaperSent, 0.6)
 
 # hard to know what the idea score threshold is
 # should I conduct tests to choose? Should I get a better understanding of the theory and calculate some threshold?
+
+## The current output is a dictionary with quote:list pairs, where the list contains quote:score pairs for quotes that match the other quote over some threshold score
+
+# 1 We need the webcrawler to get our reference sources
+# 2 We need to clean up the PDFs better
+# 3 We need to have some better method for choosing 
+
+if __name__ == '__main__':
+    process = CrawlerProcess(
+        settings={
+            "FEEDS": {
+                "items.json": {"format": "json"},
+            },
+        }
+    )
+
+    process.crawl(QuotesSpider)
+    process.start()  # the script will block here until the crawling is finished
